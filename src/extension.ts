@@ -35,24 +35,52 @@ export function activate(context: vscode.ExtensionContext) {
 			};
 		}
 
-		let i = 0;
-		while (i < lines.length) {
-			const line = (lines[i] || '').trim();
-			const key = `${editor.document.uri}.${i}`;
-			if (line.length > 2 && line.startsWith('//')) {
-				const message = getMessage(editor.document.languageId, line);
-				if (!editorDecorations[path].options[key]) {
-					editorDecorations[path].options[key] = {
-						range: new vscode.Range(new vscode.Position(i, 1024), new vscode.Position(i, 1024)),
-						renderOptions: { after: { contentText: message, fontStyle: 'italic' } }
-					};
-				}
-			} else {
-				delete editorDecorations[path].options[key];
-			}
+let i = 0;
+let inMultiLineComment = false; // Track if we are inside a multi-line SQL comment
 
-			i++;
-		}
+while (i < lines.length) {
+    const line = (lines[i] || '').trim();
+    const key = `${editor.document.uri}.${i}`;
+
+    // Check if we are inside a multi-line comment
+    if (inMultiLineComment) {
+        const endOfComment = line.indexOf('*/') !== -1;
+        if (endOfComment) {
+            inMultiLineComment = false;
+        }
+        const message = getMessage(editor.document.languageId, line);
+        if (!editorDecorations[path].options[key]) {
+            editorDecorations[path].options[key] = {
+                range: new vscode.Range(new vscode.Position(i, 1024), new vscode.Position(i, 1024)),
+                renderOptions: { after: { contentText: message, fontStyle: 'italic' } }
+            };
+        }
+    } else if (line.length > 2 && (line.startsWith('//') || line.startsWith('--'))) {
+        // Handle single-line comments
+        const message = getMessage(editor.document.languageId, line);
+        if (!editorDecorations[path].options[key]) {
+            editorDecorations[path].options[key] = {
+                range: new vscode.Range(new vscode.Position(i, 1024), new vscode.Position(i, 1024)),
+                renderOptions: { after: { contentText: message, fontStyle: 'italic' } }
+            };
+        }
+    } else if (line.indexOf('/*') !== -1) {
+        // Start of a multi-line comment
+        inMultiLineComment = true;
+        const message = getMessage(editor.document.languageId, line);
+        if (!editorDecorations[path].options[key]) {
+            editorDecorations[path].options[key] = {
+                range: new vscode.Range(new vscode.Position(i, 1024), new vscode.Position(i, 1024)),
+                renderOptions: { after: { contentText: message, fontStyle: 'italic' } }
+            };
+        }
+    } else {
+        delete editorDecorations[path].options[key];
+    }
+
+    i++;
+}
+
 		editor.setDecorations(
 			editorDecorations[path].type,
 			Object.values(editorDecorations[path].options)
